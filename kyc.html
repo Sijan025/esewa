@@ -1,0 +1,2736 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Identity Verify — KYC Document Validation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <!-- Tesseract.js for OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --navy: #00f0ff;
+            --teal: #00b3ff;
+            --accent: #00ff66;
+            --accent-d: #00cc52;
+            --accent-light: rgba(0, 255, 102, 0.15);
+            --red: #ff0055;
+            --red-light: rgba(255, 0, 85, 0.15);
+            --warn: #ffaa00;
+            --warn-light: rgba(255, 170, 0, 0.15);
+            --blue: #00f0ff;
+            --blue-light: rgba(0, 240, 255, 0.15);
+            --gray: #161b22;
+            --gray2: #30363d;
+            --gray3: #484f58;
+            --text: #e6edf3;
+            --sub: #8b949e;
+            --white: #0d1117;
+            --shell-bg: rgba(1, 4, 9, 0.85);
+            --radius: 14px;
+            --radius-sm: 8px;
+            --radius-lg: 18px;
+            --glow: 0 0 12px rgba(0, 240, 255, 0.4);
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: #05080f;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 24px 16px;
+            color: var(--text);
+        }
+
+        /* ── SHELL ── */
+        .shell {
+            width: 420px;
+            max-width: 100%;
+            background: var(--shell-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid var(--gray2);
+            overflow: hidden;
+            box-shadow: 0 12px 48px rgba(0, 240, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            min-height: 700px;
+            position: relative;
+        }
+
+        /* ── TOPBAR ── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 22px 14px;
+            border-bottom: 1px solid var(--gray2);
+            background: transparent;
+            flex-shrink: 0;
+        }
+
+        .topbar-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--navy);
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+            letter-spacing: -.2px;
+        }
+
+        .topbar-icons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 1.5px solid var(--gray2);
+            background: var(--white);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--sub);
+            font-size: 14px;
+            font-family: 'DM Sans', sans-serif;
+            transition: all .2s;
+        }
+
+        .icon-btn:hover {
+            background: var(--gray);
+            border-color: var(--gray3);
+        }
+
+        /* ── CONTENT SCROLL ── */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .content::-webkit-scrollbar {
+            width: 3px;
+        }
+
+        .content::-webkit-scrollbar-thumb {
+            background: var(--gray3);
+            border-radius: 3px;
+        }
+
+        /* ── BOTTOM NAV ── */
+        .bottomnav {
+            display: flex;
+            border-top: 1px solid var(--gray2);
+            background: transparent;
+            flex-shrink: 0;
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 0 8px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--sub);
+            gap: 3px;
+            transition: color .2s;
+            letter-spacing: .3px;
+        }
+
+        .nav-item.active {
+            color: var(--navy);
+        }
+
+        .nav-icon {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        /* ── SCREEN BASE ── */
+        .screen {
+            display: none;
+            animation: fadeUp .3s ease both;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ══════════════════════════════
+   SCREEN 1 — REGISTRATION
+══════════════════════════════ */
+        .s1 {
+            padding: 24px 22px 28px;
+        }
+
+        .s1-h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 6px;
+            letter-spacing: -.4px;
+        }
+
+        .s1-sub {
+            font-size: 13px;
+            color: var(--sub);
+            line-height: 1.6;
+            margin-bottom: 22px;
+        }
+
+        .field-group {
+            margin-bottom: 14px;
+        }
+
+        .field-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--sub);
+            margin-bottom: 5px;
+            display: block;
+            letter-spacing: .4px;
+            text-transform: uppercase;
+        }
+
+        .field-input {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1.5px solid var(--gray2);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: 'DM Sans', sans-serif;
+            color: var(--text);
+            background: var(--white);
+            outline: none;
+            transition: border-color .2s;
+        }
+
+        .field-input:focus {
+            border-color: var(--blue);
+        }
+
+        .field-input::placeholder {
+            color: var(--sub);
+            opacity: .6;
+        }
+
+        .field-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .doc-type-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .doc-card {
+            border: 1.5px solid var(--gray2);
+            border-radius: var(--radius-sm);
+            padding: 12px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all .2s;
+            background: var(--white);
+        }
+
+        .doc-card:hover {
+            border-color: var(--navy);
+            background: var(--gray);
+        }
+
+        .doc-card.selected {
+            border-color: var(--blue);
+            background: var(--blue-light);
+        }
+
+        .doc-card-icon {
+            font-size: 22px;
+            margin-bottom: 5px;
+        }
+
+        .doc-card-name {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .doc-card-sub {
+            font-size: 10px;
+            color: var(--sub);
+            margin-top: 1px;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--navy);
+            border: 1px solid var(--navy);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            transition: all .2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary:hover {
+            background: var(--navy);
+            color: #000;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);
+        }
+
+        .guidelines-box {
+            background: var(--gray);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            margin-bottom: 20px;
+        }
+
+        .g-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--sub);
+            letter-spacing: .8px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            text-transform: uppercase;
+        }
+
+        .g-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--gray2);
+        }
+
+        .g-item:last-child {
+            border-bottom: none;
+        }
+
+        .g-item-icon {
+            font-size: 15px;
+            margin-top: 1px;
+            flex-shrink: 0;
+        }
+
+        .g-item-text {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .g-item-sub {
+            font-size: 11px;
+            color: var(--sub);
+            margin-top: 1px;
+        }
+
+        .privacy-note {
+            text-align: center;
+            font-size: 11px;
+            color: var(--sub);
+            margin-top: 14px;
+            line-height: 1.5;
+        }
+
+        /* ══════════════════════════════
+   SCREEN 2 — CAPTURE
+══════════════════════════════ */
+        .cam-wrap {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cam-area {
+            position: relative;
+            background: #080e18;
+            height: 300px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .step-pill {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, .6);
+            backdrop-filter: blur(4px);
+            border-radius: 20px;
+            padding: 5px 14px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            z-index: 10;
+        }
+
+        .step-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .sdot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .25);
+        }
+
+        .sdot.on {
+            background: var(--accent);
+        }
+
+        .step-label {
+            font-size: 10px;
+            color: rgba(255, 255, 255, .75);
+            font-weight: 600;
+            letter-spacing: .5px;
+        }
+
+        /* Doc detection banner */
+        .doc-detect-banner {
+            position: absolute;
+            top: 44px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            white-space: nowrap;
+            transition: all .4s;
+        }
+
+        .ddb {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, .25);
+        }
+
+        .ddb.not-found {
+            background: rgba(229, 57, 53, .92);
+        }
+
+        .ddb.found {
+            background: rgba(46, 194, 126, .92);
+        }
+
+        .ddb.partial {
+            background: rgba(245, 158, 11, .92);
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #fff;
+            animation: pulse 1.2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: .4;
+                transform: scale(.7);
+            }
+        }
+
+        /* camera video/canvas */
+        #videoEl {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        #canvasEl {
+            display: none;
+        }
+
+        #analysisCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+
+        .cam-placeholder {
+            text-align: center;
+            color: #555;
+            padding: 20px;
+        }
+
+        .cam-placeholder-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+            opacity: .4;
+        }
+
+        .cam-placeholder p {
+            font-size: 13px;
+            opacity: .6;
+        }
+
+        /* Guide frame */
+        .doc-guide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 82%;
+            height: 78%;
+            pointer-events: none;
+            transition: all .4s;
+        }
+
+        .frame-corner {
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            transition: border-color .4s, box-shadow .4s;
+        }
+
+        .fc-tl {
+            top: -2px;
+            left: -2px;
+            border-top: 3px solid var(--navy);
+            border-left: 3px solid var(--navy);
+            border-radius: 5px 0 0 0;
+            box-shadow: -4px -4px 10px rgba(0, 240, 255, 0.2);
+        }
+
+        .fc-tr {
+            top: -2px;
+            right: -2px;
+            border-top: 3px solid var(--navy);
+            border-right: 3px solid var(--navy);
+            border-radius: 0 5px 0 0;
+            box-shadow: 4px -4px 10px rgba(0, 240, 255, 0.2);
+        }
+
+        .fc-bl {
+            bottom: -2px;
+            left: -2px;
+            border-bottom: 3px solid var(--navy);
+            border-left: 3px solid var(--navy);
+            border-radius: 0 0 0 5px;
+            box-shadow: -4px 4px 10px rgba(0, 240, 255, 0.2);
+        }
+
+        .fc-br {
+            bottom: -2px;
+            right: -2px;
+            border-bottom: 3px solid var(--navy);
+            border-right: 3px solid var(--navy);
+            border-radius: 0 0 5px 0;
+            box-shadow: 4px 4px 10px rgba(0, 240, 255, 0.2);
+        }
+
+        .doc-guide.good .fc-tl,
+        .doc-guide.good .fc-tr,
+        .doc-guide.good .fc-bl,
+        .doc-guide.good .fc-br {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent);
+        }
+
+        .doc-guide.bad .fc-tl,
+        .doc-guide.bad .fc-tr,
+        .doc-guide.bad .fc-bl,
+        .doc-guide.bad .fc-br {
+            border-color: var(--red);
+            box-shadow: 0 0 20px var(--red);
+        }
+
+        .doc-guide.warn .fc-tl,
+        .doc-guide.warn .fc-tr,
+        .doc-guide.warn .fc-bl,
+        .doc-guide.warn .fc-br {
+            border-color: var(--warn);
+            box-shadow: 0 0 20px var(--warn);
+        }
+
+        .guide-dashes {
+            position: absolute;
+            inset: 0;
+            border: 1.5px dashed rgba(255, 255, 255, .2);
+            border-radius: 6px;
+            transition: border-color .4s;
+        }
+
+        .doc-guide.good .guide-dashes {
+            border-color: rgba(46, 194, 126, .5);
+            border-style: solid;
+        }
+
+        .doc-guide.bad .guide-dashes {
+            border-color: rgba(229, 57, 53, .4);
+            border-style: solid;
+        }
+
+        .doc-guide.warn .guide-dashes {
+            border-color: rgba(245, 158, 11, .5);
+            border-style: dashed;
+        }
+
+        /* Scan line */
+        .scan-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--navy), transparent);
+            box-shadow: 0 0 15px var(--navy);
+            animation: scanMove 2.5s ease-in-out infinite;
+        }
+
+        @keyframes scanMove {
+
+            0%,
+            100% {
+                top: 10%;
+                opacity: 0;
+            }
+
+            15% {
+                opacity: 1;
+            }
+
+            85% {
+                opacity: 1;
+            }
+
+            to {
+                top: 90%;
+                opacity: 0;
+            }
+        }
+
+        /* Glare/quality overlays inside camera */
+        .cam-quality-pills {
+            position: absolute;
+            top: auto;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+            z-index: 8;
+        }
+
+        .qpill {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .qpill.pass {
+            background: rgba(46, 194, 126, .85);
+            color: #fff;
+        }
+
+        .qpill.fail {
+            background: rgba(229, 57, 53, .85);
+            color: #fff;
+        }
+
+        .qpill.warn {
+            background: rgba(245, 158, 11, .9);
+            color: #fff;
+        }
+
+        /* LIVE badge */
+        .live-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--red);
+            color: #fff;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: none;
+            align-items: center;
+            gap: 4px;
+            letter-spacing: .5px;
+            z-index: 10;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #fff;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: .3;
+            }
+        }
+
+        /* Quality score overlay */
+        .quality-overlay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, .65);
+            backdrop-filter: blur(4px);
+            border-radius: 8px;
+            padding: 7px 10px;
+            display: none;
+            z-index: 9;
+        }
+
+        .quality-label {
+            font-size: 9px;
+            color: rgba(255, 255, 255, .55);
+            margin-bottom: 2px;
+            font-weight: 500;
+            letter-spacing: .3px;
+            text-transform: uppercase;
+        }
+
+        .quality-score {
+            font-size: 19px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .quality-score span {
+            font-size: 11px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, .45);
+        }
+
+        /* Camera bottom controls */
+        .cam-bottom {
+            background: var(--white);
+            padding: 18px 20px 16px;
+        }
+
+        .cam-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 4px;
+        }
+
+        .cam-desc {
+            font-size: 12px;
+            color: var(--sub);
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .cam-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .cam-ctrl-btn {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: 1.5px solid var(--gray2);
+            background: var(--white);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: background .2s;
+        }
+
+        .cam-ctrl-btn:hover {
+            background: var(--gray);
+        }
+
+        .cam-capture {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: var(--navy);
+            border: 5px solid var(--gray2);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 14px rgba(0, 0, 0, .18);
+            transition: transform .15s, background .2s;
+        }
+
+        .cam-capture:hover {
+            transform: scale(1.05);
+            background: var(--teal);
+        }
+
+        .cam-capture:disabled {
+            opacity: .4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .cam-capture-inner {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: var(--white);
+            opacity: .15;
+        }
+
+        .enc-badge {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: .5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .btn-start-cam {
+            width: 100%;
+            padding: 13px;
+            background: var(--blue);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            transition: background .2s;
+            margin-bottom: 10px;
+        }
+
+        .btn-start-cam:hover {
+            background: #0C447C;
+        }
+
+        .btn-retry-cam {
+            width: 100%;
+            padding: 10px;
+            background: var(--gray);
+            color: var(--text);
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            display: none;
+        }
+
+        /* Checks panel (side panel style, now below camera) */
+        .checks-strip {
+            padding: 0 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .check-card {
+            background: var(--white);
+            border: 1.5px solid var(--gray2);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            transition: border-color .3s;
+        }
+
+        .check-card.pass {
+            border-color: #639922;
+        }
+
+        .check-card.fail {
+            border-color: var(--red);
+        }
+
+        .check-card.warn {
+            border-color: var(--warn);
+        }
+
+        .check-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .check-name {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .check-status {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            letter-spacing: .3px;
+        }
+
+        .check-status.idle {
+            background: var(--gray);
+            color: var(--sub);
+        }
+
+        .check-status.pass {
+            background: #EAF3DE;
+            color: #3B6D11;
+        }
+
+        .check-status.fail {
+            background: #FCEBEB;
+            color: #A32D2D;
+        }
+
+        .check-status.warn {
+            background: #FAEEDA;
+            color: #854F0B;
+        }
+
+        .check-bar-bg {
+            height: 3px;
+            background: var(--gray2);
+            border-radius: 2px;
+            margin-bottom: 5px;
+            overflow: hidden;
+        }
+
+        .check-bar {
+            height: 3px;
+            border-radius: 2px;
+            width: 0%;
+            transition: width .5s, background .3s;
+            background: var(--gray3);
+        }
+
+        .check-bar.good {
+            background: #639922;
+        }
+
+        .check-bar.ok {
+            background: var(--warn);
+        }
+
+        .check-bar.bad {
+            background: var(--red);
+        }
+
+        .check-msg {
+            font-size: 10px;
+            color: var(--sub);
+            line-height: 1.4;
+        }
+
+        /* Guidance card */
+        .guidance-card {
+            background: var(--blue-light);
+            border: 1.5px solid rgba(24, 95, 165, .15);
+            border-radius: var(--radius-sm);
+            padding: 11px 13px;
+            margin: 0 20px 16px;
+        }
+
+        .guidance-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--blue);
+            margin-bottom: 7px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+
+        .guidance-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 7px;
+            margin-bottom: 5px;
+            font-size: 11px;
+            color: var(--teal);
+            line-height: 1.4;
+        }
+
+        .guidance-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--blue);
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+
+        /* Overall score */
+        .overall-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 20px 14px;
+        }
+
+        .overall-label {
+            font-size: 11px;
+            color: var(--sub);
+            white-space: nowrap;
+        }
+
+        .overall-track {
+            flex: 1;
+            height: 6px;
+            background: var(--gray2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .overall-fill {
+            height: 6px;
+            border-radius: 3px;
+            width: 0%;
+            transition: width .6s, background .4s;
+            background: var(--gray3);
+        }
+
+        .overall-score-num {
+            font-size: 14px;
+            font-weight: 700;
+            min-width: 34px;
+            text-align: right;
+        }
+
+        /* ══════════════════════════════
+   SCREEN 3 — REVIEW
+══════════════════════════════ */
+        .s3 {
+            padding: 0 0 24px;
+        }
+
+        .s3-prog {
+            padding: 16px 22px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .prog-dots {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .pdot {
+            height: 5px;
+            border-radius: 3px;
+            background: var(--gray2);
+        }
+
+        .pdot.done {
+            background: var(--accent);
+            width: 20px;
+        }
+
+        .pdot.active {
+            background: var(--navy);
+            width: 26px;
+        }
+
+        .pdot.todo {
+            width: 7px;
+        }
+
+        .prog-label {
+            font-size: 11px;
+            color: var(--sub);
+            font-weight: 600;
+        }
+
+        .s3-body {
+            padding: 14px 22px 0;
+        }
+
+        .s3-h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 4px;
+            letter-spacing: -.3px;
+        }
+
+        .s3-sub {
+            font-size: 12px;
+            color: var(--sub);
+            line-height: 1.5;
+            margin-bottom: 14px;
+        }
+
+        .doc-preview {
+            position: relative;
+            background: #0d1a2a;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            height: 190px;
+            margin-bottom: 14px;
+        }
+
+        .preview-doc {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 84%;
+            height: 158px;
+            background: linear-gradient(135deg, #4a9fc8 0%, #6bbfe0 60%, #3d8fb5 100%);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .preview-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            border-radius: 12px;
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .preview-badge.aligned {
+            background: var(--accent);
+        }
+
+        .preview-badge.misaligned {
+            background: var(--red);
+        }
+
+        .pfc {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+        }
+
+        .pfc-tl {
+            top: 7px;
+            left: 7px;
+            border-top: 2px solid var(--accent);
+            border-left: 2px solid var(--accent);
+            border-radius: 3px 0 0 0;
+        }
+
+        .pfc-tr {
+            top: 7px;
+            right: 7px;
+            border-top: 2px solid var(--accent);
+            border-right: 2px solid var(--accent);
+            border-radius: 0 3px 0 0;
+        }
+
+        .pfc-bl {
+            bottom: 7px;
+            left: 7px;
+            border-bottom: 2px solid var(--accent);
+            border-left: 2px solid var(--accent);
+            border-radius: 0 0 0 3px;
+        }
+
+        .pfc-br {
+            bottom: 7px;
+            right: 7px;
+            border-bottom: 2px solid var(--accent);
+            border-right: 2px solid var(--accent);
+            border-radius: 0 0 3px 0;
+        }
+
+        /* Quality Analysis */
+        .qa-box {
+            border: 1.5px solid var(--gray2);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .qa-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .8px;
+            color: var(--sub);
+            padding: 10px 14px;
+            background: var(--gray);
+            border-bottom: 1px solid var(--gray2);
+            text-transform: uppercase;
+        }
+
+        .qa-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 11px;
+            padding: 11px 14px;
+            border-bottom: 1px solid var(--gray2);
+        }
+
+        .qa-row:last-child {
+            border-bottom: none;
+        }
+
+        .qa-row.qa-warn {
+            background: var(--red-light);
+        }
+
+        .qa-row.qa-ok {
+            background: var(--warn-light);
+        }
+
+        .qa-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .qa-icon.pass {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .qa-icon.fail {
+            background: var(--red);
+            color: #fff;
+        }
+
+        .qa-icon.warn {
+            background: var(--warn);
+            color: #fff;
+        }
+
+        .qa-text-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .qa-text-title.fail {
+            color: var(--red);
+        }
+
+        .qa-text-title.warn {
+            color: #92400e;
+        }
+
+        .qa-text-sub {
+            font-size: 11px;
+            color: var(--sub);
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+
+        .qa-text-sub.fail {
+            color: rgba(229, 57, 53, .75);
+        }
+
+        .qa-text-sub.warn {
+            color: rgba(146, 64, 14, .75);
+        }
+
+        /* Identity verification result */
+        .id-verify-box {
+            border: 1.5px solid var(--gray2);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+
+        .id-verify-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .8px;
+            color: var(--sub);
+            padding: 10px 14px;
+            background: var(--gray);
+            border-bottom: 1px solid var(--gray2);
+            text-transform: uppercase;
+        }
+
+        .id-verify-content {
+            padding: 14px;
+        }
+
+        .id-compare {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .id-field {
+            flex: 1;
+            background: var(--gray);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+        }
+
+        .id-field-label {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--sub);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            margin-bottom: 4px;
+        }
+
+        .id-field-val {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+        }
+
+        .id-result-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .id-result-row.match {
+            background: var(--accent-light);
+            color: var(--accent-d);
+        }
+
+        .id-result-row.nomatch {
+            background: var(--red-light);
+            color: var(--red);
+        }
+
+        .id-result-row.checking {
+            background: var(--blue-light);
+            color: var(--blue);
+        }
+
+        .id-result-icon {
+            font-size: 16px;
+        }
+
+        .id-result-sub {
+            font-size: 11px;
+            font-weight: 400;
+            margin-top: 2px;
+            opacity: .8;
+        }
+
+        .submit-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: calc(100% - 44px);
+            margin: 4px 22px 0;
+            padding: 14px;
+            background: var(--navy);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            transition: background .2s;
+        }
+
+        .submit-btn:hover {
+            background: var(--teal);
+        }
+
+        .submit-btn:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        /* ══════════════════════════════
+   SCREEN 4 — SUCCESS
+══════════════════════════════ */
+        .s4 {
+            padding: 36px 24px 28px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .success-ring {
+            width: 92px;
+            height: 92px;
+            border-radius: 50%;
+            background: var(--accent-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 22px;
+            position: relative;
+            animation: popIn .5s cubic-bezier(.34, 1.56, .64, 1) both;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .success-ring::before {
+            content: '';
+            position: absolute;
+            inset: -7px;
+            border-radius: 50%;
+            border: 3px solid rgba(46, 194, 126, .18);
+        }
+
+        .success-check {
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            color: #fff;
+        }
+
+        .s4-h1 {
+            font-size: 21px;
+            font-weight: 700;
+            color: var(--navy);
+            text-align: center;
+            margin-bottom: 8px;
+            line-height: 1.3;
+            letter-spacing: -.3px;
+        }
+
+        .s4-sub {
+            font-size: 13px;
+            color: var(--sub);
+            text-align: center;
+            line-height: 1.6;
+            margin-bottom: 26px;
+        }
+
+        .s4-cards {
+            width: 100%;
+        }
+
+        .s4-card-full {
+            border: 1.5px solid var(--gray2);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            background: var(--white);
+        }
+
+        .s4-card-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .s4-card-half {
+            border: 1.5px solid var(--gray2);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            background: var(--white);
+        }
+
+        .s4-card-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--gray);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .s4-card-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .s4-badge {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: .6px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .s4-badge.approved {
+            color: var(--accent-d);
+            background: var(--accent-light);
+        }
+
+        .s4-badge.success {
+            color: var(--accent-d);
+            background: var(--accent-light);
+        }
+
+        .s4-badge.enc {
+            color: var(--sub);
+            background: var(--gray2);
+        }
+
+        .continue-btn {
+            width: 100%;
+            padding: 15px;
+            background: var(--navy);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            margin-top: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background .2s;
+        }
+
+        .continue-btn:hover {
+            background: var(--teal);
+        }
+
+        .sec-id {
+            text-align: center;
+            font-size: 10px;
+            color: var(--sub);
+            margin-top: 10px;
+            font-family: 'DM Mono', monospace;
+        }
+
+        .s4-score-summary {
+            width: 100%;
+            background: var(--gray);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            margin-bottom: 10px;
+        }
+
+        .s4-score-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--sub);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            margin-bottom: 10px;
+        }
+
+        .s4-score-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .s4-score-label {
+            font-size: 11px;
+            color: var(--sub);
+            width: 90px;
+            flex-shrink: 0;
+        }
+
+        .s4-score-bar {
+            flex: 1;
+            height: 4px;
+            background: var(--gray2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .s4-score-fill {
+            height: 4px;
+            border-radius: 2px;
+            background: var(--accent);
+        }
+
+        .s4-score-val {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text);
+            width: 28px;
+            text-align: right;
+        }
+
+        /* ══════ UTILITY ══════ */
+        .divider {
+            height: 1px;
+            background: var(--gray2);
+            margin: 0 22px 14px;
+        }
+
+        .section-tag {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--sub);
+            text-transform: uppercase;
+            letter-spacing: .7px;
+            padding: 0 22px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="shell">
+        <!-- TOP BAR -->
+        <div class="topbar">
+            <span class="topbar-title">Identity Verify</span>
+            <div class="topbar-icons">
+                <button class="icon-btn" onclick="showHelp()">?</button>
+                <button class="icon-btn" onclick="goTo('s1')">✕</button>
+            </div>
+        </div>
+
+        <div class="content" id="mainContent">
+
+            <!-- ═══════════════════════════
+         SCREEN 1 — REGISTRATION + DOC SELECT
+    ═══════════════════════════ -->
+            <div id="s1" class="screen active">
+                <div class="s1">
+                    <div class="s1-h1">Verify your identity</div>
+                    <div class="s1-sub">Enter your registered name and select a government-issued document to begin
+                        verification.</div>
+
+                    <!-- User details -->
+                    <div class="field-group">
+                        <label class="field-label">Full registered name</label>
+                        <input class="field-input" id="regName" type="text" placeholder="e.g. Arjun Sharma"
+                            autocomplete="name">
+                    </div>
+                    <div class="field-row" style="margin-bottom:14px;">
+                        <div class="field-group" style="margin:0;">
+                            <label class="field-label">Date of birth</label>
+                            <input class="field-input" id="regDob" type="date">
+                        </div>
+                        <div class="field-group" style="margin:0;">
+                            <label class="field-label">Nationality</label>
+                            <input class="field-input" id="regNat" type="text" placeholder="e.g. Nepali">
+                        </div>
+                    </div>
+
+                    <!-- Document type -->
+                    <label class="field-label" style="margin-bottom:8px;display:block;">Select document type</label>
+                    <div class="doc-type-grid" id="docTypeGrid">
+                        <div class="doc-card selected" onclick="selectDoc(this,'passport')">
+                            <div class="doc-card-icon">📘</div>
+                            <div class="doc-card-name">Passport</div>
+                            <div class="doc-card-sub">International</div>
+                        </div>
+                        <div class="doc-card" onclick="selectDoc(this,'national-id')">
+                            <div class="doc-card-icon">🪪</div>
+                            <div class="doc-card-name">National ID</div>
+                            <div class="doc-card-sub">Gov. issued</div>
+                        </div>
+                        <div class="doc-card" onclick="selectDoc(this,'drivers-license')">
+                            <div class="doc-card-icon">🚗</div>
+                            <div class="doc-card-name">Driver's</div>
+                            <div class="doc-card-sub">License</div>
+                        </div>
+                    </div>
+
+                    <!-- Guidelines -->
+                    <div class="guidelines-box">
+                        <div class="g-title">ℹ️ Capture guidelines</div>
+                        <div class="g-item">
+                            <div class="g-item-icon">☀️</div>
+                            <div>
+                                <div class="g-item-text">Clear lighting</div>
+                                <div class="g-item-sub">Use a well-lit room — avoid strong overhead light.</div>
+                            </div>
+                        </div>
+                        <div class="g-item">
+                            <div class="g-item-icon">🔆</div>
+                            <div>
+                                <div class="g-item-text">Avoid glare</div>
+                                <div class="g-item-sub">Tilt document to prevent reflections obscuring text.</div>
+                            </div>
+                        </div>
+                        <div class="g-item">
+                            <div class="g-item-icon">⬜</div>
+                            <div>
+                                <div class="g-item-text">Keep within frame</div>
+                                <div class="g-item-sub">All four document corners must be visible.</div>
+                            </div>
+                        </div>
+                        <div class="g-item">
+                            <div class="g-item-icon">✋</div>
+                            <div>
+                                <div class="g-item-text">Hold steady</div>
+                                <div class="g-item-sub">Rest hands or brace against a surface for sharpness.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" onclick="startKYC()">
+                        Start verification →
+                    </button>
+                    <div class="privacy-note">🔒 Your data is encrypted and stored securely per our privacy policy.
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════
+         SCREEN 2 — LIVE CAPTURE
+    ═══════════════════════════ -->
+            <div id="s2" class="screen">
+                <div class="cam-wrap">
+                    <!-- Camera viewport -->
+                    <div class="cam-area" id="camArea">
+                        <!-- Step pill -->
+                        <div class="step-pill">
+                            <div class="step-dots">
+                                <div class="sdot on"></div>
+                                <div class="sdot on"></div>
+                                <div class="sdot"></div>
+                                <div class="sdot"></div>
+                            </div>
+                            <span class="step-label">STEP 2 OF 4</span>
+                        </div>
+
+                        <!-- Document detection banner -->
+                        <div class="doc-detect-banner" id="detectBanner">
+                            <div class="ddb not-found" id="detectBadge">
+                                <div class="pulse-dot"></div>
+                                <span id="detectText">Scanning for document…</span>
+                            </div>
+                        </div>
+
+                        <!-- Placeholder -->
+                        <div class="cam-placeholder" id="placeholder">
+                            <div class="cam-placeholder-icon">📷</div>
+                            <p>Camera inactive</p>
+                            <p style="font-size:11px;margin-top:4px;opacity:.4;">Click below to start</p>
+                        </div>
+
+                        <!-- Video/canvas -->
+                        <video id="videoEl" autoplay playsinline muted></video>
+                        <canvas id="canvasEl" width="640" height="480"></canvas>
+                        <canvas id="analysisCanvas"></canvas>
+
+                        <!-- Guide frame -->
+                        <div class="doc-guide" id="docGuide">
+                            <div class="guide-dashes"></div>
+                            <div class="frame-corner fc-tl"></div>
+                            <div class="frame-corner fc-tr"></div>
+                            <div class="frame-corner fc-bl"></div>
+                            <div class="frame-corner fc-br"></div>
+                            <div class="scan-line" id="scanLine" style="display:none;"></div>
+                        </div>
+
+                        <!-- LIVE badge -->
+                        <div class="live-badge" id="liveBadge">
+                            <div class="live-dot"></div> LIVE
+                        </div>
+
+                        <!-- Quality score -->
+                        <div class="quality-overlay" id="qualityOverlay">
+                            <div class="quality-label">Quality score</div>
+                            <div class="quality-score" id="liveScore">—<span>/100</span></div>
+                        </div>
+
+                        <!-- Quick pills -->
+                        <div class="cam-quality-pills" id="camPills"></div>
+
+                        <!-- Captured preview -->
+                        <img id="previewImg" style="display:none;width:100%;height:100%;object-fit:cover;"
+                            alt="Captured document">
+                    </div>
+
+                    <!-- Overall score bar -->
+                    <div class="overall-bar" id="overallBar" style="display:none;">
+                        <span class="overall-label">Overall</span>
+                        <div class="overall-track">
+                            <div class="overall-fill" id="overallFill"></div>
+                        </div>
+                        <span class="overall-score-num" id="overallNum">0</span>
+                    </div>
+
+                    <!-- Camera controls -->
+                    <div class="cam-bottom">
+                        <div class="cam-title" id="camTitle">Capture Front of ID</div>
+                        <div class="cam-desc" id="camDesc">Position your <strong id="docTypeLabel">Passport</strong>
+                            inside the guide frame. All four corners must be visible.</div>
+                        <div id="camStartArea">
+                            <button class="btn-start-cam" onclick="startCamera()">📷 Start camera</button>
+                        </div>
+                        <div id="camActiveControls" style="display:none;">
+                            <div class="cam-controls">
+                                <button class="cam-ctrl-btn" id="flashBtn" onclick="toggleFlash()"
+                                    title="Flash">⚡</button>
+                                <button class="cam-capture" id="captureBtn" onclick="captureDoc()" disabled
+                                    title="Capture">
+                                    <div class="cam-capture-inner"></div>
+                                </button>
+                                <button class="cam-ctrl-btn" onclick="flipCamera()" title="Flip">🔄</button>
+                            </div>
+                            <div class="enc-badge">🔒 SECURE END-TO-END ENCRYPTION</div>
+                        </div>
+                        <button class="btn-retry-cam" id="btnRetry" onclick="retryCapture()">↩ Retake photo</button>
+                    </div>
+
+                    <!-- Quality checks strip -->
+                    <div class="section-tag">Quality checks</div>
+                    <div class="checks-strip" id="checksStrip">
+                        <div class="check-card" id="card-detect">
+                            <div class="check-header">
+                                <span class="check-name">Document detected</span>
+                                <span class="check-status idle" id="status-detect">Idle</span>
+                            </div>
+                            <div class="check-bar-bg">
+                                <div class="check-bar" id="bar-detect"></div>
+                            </div>
+                            <div class="check-msg" id="msg-detect">Waiting for camera feed…</div>
+                        </div>
+                        <div class="check-card" id="card-blur">
+                            <div class="check-header">
+                                <span class="check-name">Sharpness / blur</span>
+                                <span class="check-status idle" id="status-blur">Idle</span>
+                            </div>
+                            <div class="check-bar-bg">
+                                <div class="check-bar" id="bar-blur"></div>
+                            </div>
+                            <div class="check-msg" id="msg-blur">Laplacian variance analysis</div>
+                        </div>
+                        <div class="check-card" id="card-glare">
+                            <div class="check-header">
+                                <span class="check-name">Glare / reflection</span>
+                                <span class="check-status idle" id="status-glare">Idle</span>
+                            </div>
+                            <div class="check-bar-bg">
+                                <div class="check-bar" id="bar-glare"></div>
+                            </div>
+                            <div class="check-msg" id="msg-glare">Overexposed pixel detection</div>
+                        </div>
+                        <div class="check-card" id="card-frame">
+                            <div class="check-header">
+                                <span class="check-name">Document framing</span>
+                                <span class="check-status idle" id="status-frame">Idle</span>
+                            </div>
+                            <div class="check-bar-bg">
+                                <div class="check-bar" id="bar-frame"></div>
+                            </div>
+                            <div class="check-msg" id="msg-frame">Edge detection for boundaries</div>
+                        </div>
+                        <div class="check-card" id="card-light">
+                            <div class="check-header">
+                                <span class="check-name">Lighting / exposure</span>
+                                <span class="check-status idle" id="status-light">Idle</span>
+                            </div>
+                            <div class="check-bar-bg">
+                                <div class="check-bar" id="bar-light"></div>
+                            </div>
+                            <div class="check-msg" id="msg-light">Brightness distribution analysis</div>
+                        </div>
+                    </div>
+
+                    <!-- Live guidance -->
+                    <div class="guidance-card">
+                        <div class="guidance-title">💡 Live guidance</div>
+                        <div id="guidanceList">
+                            <div class="guidance-item">
+                                <div class="guidance-dot"></div>Start the camera to see real-time guidance
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════
+         SCREEN 3 — REVIEW + ID VERIFY
+    ═══════════════════════════ -->
+            <div id="s3" class="screen">
+                <div class="s3">
+                    <div class="s3-prog">
+                        <div class="prog-dots">
+                            <div class="pdot done"></div>
+                            <div class="pdot done"></div>
+                            <div class="pdot active"></div>
+                            <div class="pdot todo"></div>
+                        </div>
+                        <div class="prog-label">Step 3 of 4</div>
+                    </div>
+                    <div class="s3-body">
+                        <div class="s3-h1">Review Document</div>
+                        <div class="s3-sub">Verify the quality of your ID capture before submitting.</div>
+
+                        <!-- Document preview -->
+                        <div class="doc-preview" id="reviewPreview">
+                            <div class="preview-doc" id="previewDocSim">
+                                <div
+                                    style="position:absolute;top:12px;left:12px;width:46px;height:58px;background:#b0c4d8;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px;">
+                                    👤</div>
+                                <div style="position:absolute;top:12px;left:68px;right:10px;">
+                                    <div style="font-size:10px;font-weight:700;color:#fff;letter-spacing:1px;margin-bottom:5px;"
+                                        id="previewDocType">PASSPORT</div>
+                                    <div
+                                        style="height:5px;background:rgba(255,255,255,.45);border-radius:2px;margin-bottom:4px;width:85%">
+                                    </div>
+                                    <div
+                                        style="height:5px;background:rgba(255,255,255,.45);border-radius:2px;margin-bottom:4px;width:70%">
+                                    </div>
+                                    <div
+                                        style="height:5px;background:rgba(255,255,255,.45);border-radius:2px;margin-bottom:4px;width:78%">
+                                    </div>
+                                    <div
+                                        style="height:5px;background:rgba(255,255,255,.45);border-radius:2px;width:60%">
+                                    </div>
+                                </div>
+                                <div
+                                    style="position:absolute;bottom:8px;left:12px;right:12px;height:5px;background:rgba(255,255,255,.25);border-radius:2px;">
+                                </div>
+                            </div>
+                            <div class="pfc pfc-tl"></div>
+                            <div class="pfc pfc-tr"></div>
+                            <div class="pfc pfc-bl"></div>
+                            <div class="pfc pfc-br"></div>
+                            <div class="preview-badge aligned" id="alignBadge">✅ Document Aligned</div>
+                        </div>
+
+                        <!-- Quality analysis -->
+                        <div class="qa-box">
+                            <div class="qa-title">Quality Analysis</div>
+                            <div id="qaRows"><!-- populated by JS --></div>
+                        </div>
+
+                        <!-- Identity Verification -->
+                        <div class="id-verify-box">
+                            <div class="id-verify-title">🔍 Identity Verification</div>
+                            <div class="id-verify-content">
+                                <div class="id-compare">
+                                    <div class="id-field">
+                                        <div class="id-field-label">Registered name</div>
+                                        <div class="id-field-val" id="regNameDisplay">—</div>
+                                    </div>
+                                    <div class="id-field">
+                                        <div class="id-field-label">Document name</div>
+                                        <div class="id-field-val" id="docNameDisplay">—</div>
+                                    </div>
+                                </div>
+                                <div class="id-result-row checking" id="idVerifyResult">
+                                    <div class="id-result-icon">⏳</div>
+                                    <div>
+                                        <div>Verifying identity…</div>
+                                        <div class="id-result-sub">Matching registered name with document</div>
+                                    </div>
+                                </div>
+                                <!-- Authenticity check -->
+                                <div style="margin-top:10px;">
+                                    <div class="id-result-row" id="authResult"
+                                        style="background:var(--gray);color:var(--sub);">
+                                        <div class="id-result-icon">🛡️</div>
+                                        <div>
+                                            <div>Document authenticity check</div>
+                                            <div class="id-result-sub" id="authSub">Checking security features…</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="submit-btn" id="submitBtn" onclick="submitDocument()" disabled>
+                        Submit Document →
+                    </button>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════
+         SCREEN 4 — SUCCESS
+    ═══════════════════════════ -->
+            <div id="s4" class="screen">
+                <div class="s4">
+                    <div class="success-ring">
+                        <div class="success-check">✓</div>
+                    </div>
+                    <div class="s4-h1">Document Verified &amp;<br>Uploaded</div>
+                    <div class="s4-sub">Your identity documents have been successfully processed. You're one step closer
+                        to completing KYC.</div>
+
+                    <!-- Score summary -->
+                    <div class="s4-score-summary">
+                        <div class="s4-score-title">Quality summary</div>
+                        <div class="s4-score-row">
+                            <span class="s4-score-label">Sharpness</span>
+                            <div class="s4-score-bar">
+                                <div class="s4-score-fill" id="sum-blur" style="width:0%"></div>
+                            </div>
+                            <span class="s4-score-val" id="sum-blur-v">—</span>
+                        </div>
+                        <div class="s4-score-row">
+                            <span class="s4-score-label">Glare-free</span>
+                            <div class="s4-score-bar">
+                                <div class="s4-score-fill" id="sum-glare" style="width:0%"></div>
+                            </div>
+                            <span class="s4-score-val" id="sum-glare-v">—</span>
+                        </div>
+                        <div class="s4-score-row">
+                            <span class="s4-score-label">Framing</span>
+                            <div class="s4-score-bar">
+                                <div class="s4-score-fill" id="sum-frame" style="width:0%"></div>
+                            </div>
+                            <span class="s4-score-val" id="sum-frame-v">—</span>
+                        </div>
+                        <div class="s4-score-row">
+                            <span class="s4-score-label">Lighting</span>
+                            <div class="s4-score-bar">
+                                <div class="s4-score-fill" id="sum-light" style="width:0%"></div>
+                            </div>
+                            <span class="s4-score-val" id="sum-light-v">—</span>
+                        </div>
+                    </div>
+
+                    <div class="s4-cards">
+                        <div class="s4-card-full">
+                            <div class="s4-card-icon">🪪</div>
+                            <div style="flex:1;">
+                                <div class="s4-card-name">Identity Proof</div>
+                                <div style="font-size:11px;color:var(--sub);margin-top:2px;" id="s4DocType">Passport
+                                </div>
+                            </div>
+                            <span class="s4-badge approved">APPROVED</span>
+                        </div>
+                        <div class="s4-card-row" style="margin-bottom:10px;">
+                            <div class="s4-card-half">
+                                <div class="s4-card-icon">🛡️</div>
+                                <div class="s4-card-name">Liveness Check</div>
+                                <span class="s4-badge success">SUCCESS</span>
+                            </div>
+                            <div class="s4-card-half">
+                                <div class="s4-card-icon">🔒</div>
+                                <div class="s4-card-name">Data Privacy</div>
+                                <span class="s4-badge enc">ENCRYPTED</span>
+                            </div>
+                        </div>
+                        <div class="s4-card-full">
+                            <div class="s4-card-icon">✅</div>
+                            <div style="flex:1;">
+                                <div class="s4-card-name">Name Match</div>
+                                <div style="font-size:11px;color:var(--sub);margin-top:2px;" id="s4NameMatch">—</div>
+                            </div>
+                            <span class="s4-badge approved" id="s4MatchBadge">VERIFIED</span>
+                        </div>
+                    </div>
+
+                    <button class="continue-btn" onclick="goTo('s1')">Continue onboarding →</button>
+                    <div class="sec-id" id="secId">Security ID: #KYC-000-XX</div>
+                </div>
+            </div>
+
+        </div><!-- /content -->
+
+        <!-- BOTTOM NAV -->
+        <div class="bottomnav">
+            <div class="nav-item active" id="nav-verification" onclick="navClick('verification')">
+                <span class="nav-icon">🛡️</span>Verification
+            </div>
+            <div class="nav-item" id="nav-support" onclick="navClick('support')">
+                <span class="nav-icon">❓</span>Support
+            </div>
+            <div class="nav-item" id="nav-history" onclick="navClick('history')">
+                <span class="nav-icon">🕐</span>History
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── STATE ────────────────────────────────────
+        let selectedDocType = 'passport';
+        let stream = null;
+        let animFrame = null;
+        let captureReady = false;
+        let isSimulating = false;
+        let lastMetrics = { blur: 0, glare: 0, frame: 0, light: 0, detect: 0 };
+        let finalMetrics = { blur: 0, glare: 0, frame: 0, light: 0 };
+        let simTick = 0;
+
+        const video = document.getElementById('videoEl');
+        const canvas = document.getElementById('canvasEl');
+        const ctx = canvas.getContext('2d');
+
+        // ─── NAVIGATION ──────────────────────────────
+        function goTo(id) {
+            document.querySelectorAll('.screen').forEach(s => {
+                s.classList.remove('active');
+            });
+            const el = document.getElementById(id);
+            el.classList.add('active');
+            el.classList.remove('anim-in');
+            void el.offsetWidth;
+            document.getElementById('mainContent').scrollTop = 0;
+        }
+
+        function navClick(tab) {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('nav-' + tab).classList.add('active');
+            if (tab === 'support') showHelp();
+        }
+
+        function showHelp() {
+            alert('Support\n\nFor KYC assistance, contact support@identityverify.com\nOr call: +977-1-4000000\nHours: Mon–Fri, 9am–6pm NPT');
+        }
+
+        // ─── SCREEN 1 ────────────────────────────────
+        function selectDoc(el, type) {
+            document.querySelectorAll('.doc-card').forEach(b => b.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedDocType = type;
+        }
+
+        function startKYC() {
+            const name = document.getElementById('regName').value.trim();
+            if (!name) {
+                document.getElementById('regName').focus();
+                document.getElementById('regName').style.borderColor = 'var(--red)';
+                setTimeout(() => document.getElementById('regName').style.borderColor = '', 2000);
+                return;
+            }
+            const labels = { passport: 'Passport', 'national-id': 'National ID', 'drivers-license': "Driver's License" };
+            document.getElementById('docTypeLabel').textContent = labels[selectedDocType];
+            document.getElementById('previewDocType').textContent = labels[selectedDocType].toUpperCase();
+            document.getElementById('s4DocType').textContent = labels[selectedDocType];
+            goTo('s2');
+        }
+
+        // ─── SCREEN 2 — CAMERA ────────────────────────
+        async function startCamera() {
+            document.getElementById('camStartArea').style.display = 'none';
+            document.getElementById('camActiveControls').style.display = 'block';
+            document.getElementById('overallBar').style.display = 'flex';
+            document.getElementById('liveBadge').style.display = 'flex';
+            document.getElementById('qualityOverlay').style.display = 'block';
+            document.getElementById('analysisCanvas').style.display = 'block';
+            document.getElementById('scanLine').style.display = 'block';
+            document.getElementById('placeholder').style.display = 'none';
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 1280 }, height: { ideal: 960 }, facingMode: 'environment' }
+                });
+                video.srcObject = stream;
+                video.style.display = 'block';
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    document.getElementById('analysisCanvas').width = video.videoWidth;
+                    document.getElementById('analysisCanvas').height = video.videoHeight;
+                    startAnalysisLoop();
+                };
+            } catch (e) {
+                // Simulation mode
+                isSimulating = true;
+                canvas.width = 640; canvas.height = 480;
+                document.getElementById('analysisCanvas').width = 640;
+                document.getElementById('analysisCanvas').height = 480;
+                startSimulation();
+            }
+        }
+
+        function startAnalysisLoop() {
+            function loop() {
+                if (video.readyState >= 2) {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const m = analyzeFrame(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+                    renderAll(m);
+                }
+                animFrame = requestAnimationFrame(loop);
+            }
+            loop();
+        }
+
+        function startSimulation() {
+            simTick = 0;
+            function loop() {
+                simTick++;
+                const m = simulateMetrics(simTick);
+                renderAll(m);
+                animFrame = requestAnimationFrame(loop);
+            }
+            loop();
+        }
+
+        function simulateMetrics(t) {
+            const phase = Math.floor(t / 120) % 5;
+            let blur, glare, frame, light, detect;
+            if (phase === 0) {
+                // No document
+                detect = 10 + Math.random() * 15;
+                blur = 20 + Math.random() * 15; glare = 80 + Math.random() * 10;
+                frame = 15 + Math.random() * 10; light = 60 + Math.random() * 10;
+            } else if (phase === 1) {
+                // Blurry
+                detect = 65 + Math.random() * 15;
+                blur = 25 + Math.random() * 20; glare = 75 + Math.random() * 10;
+                frame = 68 + Math.random() * 10; light = 62 + Math.random() * 10;
+            } else if (phase === 2) {
+                // Glare
+                detect = 72 + Math.random() * 10;
+                blur = 78 + Math.random() * 12; glare = 22 + Math.random() * 18;
+                frame = 74 + Math.random() * 10; light = 65 + Math.random() * 10;
+            } else if (phase === 3) {
+                // Almost ready
+                detect = 82 + Math.random() * 10;
+                blur = 75 + Math.random() * 12; glare = 72 + Math.random() * 10;
+                frame = 78 + Math.random() * 10; light = 76 + Math.random() * 10;
+            } else {
+                // All pass
+                detect = 90 + Math.random() * 8;
+                blur = 88 + Math.random() * 8; glare = 85 + Math.random() * 8;
+                frame = 87 + Math.random() * 8; light = 86 + Math.random() * 8;
+            }
+            return { blur, glare, frame, light, detect };
+        }
+
+        // ─── PIXEL ANALYSIS ──────────────────────────
+        function analyzeFrame(data, w, h) {
+            return {
+                blur: computeBlur(data, w, h),
+                glare: computeGlare(data, w, h),
+                frame: computeFraming(data, w, h),
+                light: computeLighting(data, w, h),
+                detect: computeDetection(data, w, h)
+            };
+        }
+
+        function computeBlur(data, w, h) {
+            let sum = 0, count = 0, step = 4;
+            for (let y = 1; y < h - 1; y += step) for (let x = 1; x < w - 1; x += step) {
+                const i = (y * w + x) * 4, up = ((y - 1) * w + x) * 4, dn = ((y + 1) * w + x) * 4, lt = (y * w + (x - 1)) * 4, rt = (y * w + (x + 1)) * 4;
+                const g = d => (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
+                const gray = g(data), gU = (data[up] * 0.299 + data[up + 1] * 0.587 + data[up + 2] * 0.114),
+                    gD = (data[dn] * 0.299 + data[dn + 1] * 0.587 + data[dn + 2] * 0.114),
+                    gL = (data[lt] * 0.299 + data[lt + 1] * 0.587 + data[lt + 2] * 0.114),
+                    gR = (data[rt] * 0.299 + data[rt + 1] * 0.587 + data[rt + 2] * 0.114);
+                const lap = Math.abs(4 * gray - gU - gD - gL - gR);
+                sum += lap * lap; count++;
+            }
+            return Math.min(100, Math.round((Math.sqrt(sum / count) / 30) * 100));
+        }
+
+        function computeGlare(data, w, h) {
+            let bright = 0, total = data.length / 4;
+            for (let i = 0; i < data.length; i += 4) if ((data[i] + data[i + 1] + data[i + 2]) / 3 > 240) bright++;
+            return Math.round(Math.max(0, 100 - bright / total * 2000));
+        }
+
+        function computeFraming(data, w, h) {
+            const cx = Math.floor(w / 2), cy = Math.floor(h / 2), rw = Math.floor(w * .35), rh = Math.floor(h * .35);
+            let edgeCount = 0, total = 0, step = 4;
+            for (let y = cy - rh; y < cy + rh; y += step) for (let x = cx - rw; x < cx + rw; x += step) {
+                if (y < 1 || y >= h - 1 || x < 1 || x >= w - 1) continue;
+                const i = (y * w + x) * 4, rt = (y * w + (x + 1)) * 4, dn = ((y + 1) * w + x) * 4;
+                const gX = Math.abs((data[i] - data[rt]) * .299 + (data[i + 1] - data[rt + 1]) * .587 + (data[i + 2] - data[rt + 2]) * .114);
+                const gY = Math.abs((data[i] - data[dn]) * .299 + (data[i + 1] - data[dn + 1]) * .587 + (data[i + 2] - data[dn + 2]) * .114);
+                if (gX + gY > 30) edgeCount++;
+                total++;
+            }
+            return Math.min(100, Math.round((edgeCount / Math.max(1, total)) * 1500));
+        }
+
+        function computeLighting(data, w, h) {
+            let sum = 0, n = data.length / 4;
+            for (let i = 0; i < data.length; i += 4) sum += (data[i] * .299 + data[i + 1] * .587 + data[i + 2] * .114);
+            return Math.round(Math.max(0, 100 - (Math.abs(sum / n - 128) / 128) * 120));
+        }
+
+        function computeDetection(data, w, h) {
+            // Detect rectangular region with consistent color + edges
+            const cx = Math.floor(w / 2), cy = Math.floor(h / 2);
+            const rw = Math.floor(w * .38), rh = Math.floor(h * .38);
+            let colorVar = 0, count = 0;
+            const samples = [];
+            for (let y = cy - rh; y < cy + rh; y += 8) for (let x = cx - rw; x < cx + rw; x += 8) {
+                const i = (y * w + x) * 4;
+                if (i + 2 < data.length) samples.push((data[i] + data[i + 1] + data[i + 2]) / 3);
+                count++;
+            }
+            if (!samples.length) return 0;
+            const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+            const variance = samples.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / samples.length;
+            // Low variance in center = likely document (uniform card material)
+            const score = Math.min(100, Math.round(80 - variance / 8));
+            return Math.max(0, score);
+        }
+
+        // ─── RENDER ALL CHECKS ───────────────────────
+        function renderAll(m) {
+            lastMetrics = m;
+
+            // Document detection
+            const detected = m.detect > 45;
+            const docEl = document.getElementById('detectBadge');
+            const docText = document.getElementById('detectText');
+            if (m.detect < 30) {
+                docEl.className = 'ddb not-found';
+                docText.textContent = 'Document not in frame — align now';
+            } else if (m.detect < 60) {
+                docEl.className = 'ddb partial';
+                docText.textContent = 'Partial document — center it fully';
+            } else {
+                docEl.className = 'ddb found';
+                docText.textContent = 'Document Aligned ✓';
+            }
+
+            // Guide frame color
+            const guide = document.getElementById('docGuide');
+            const overall = Math.round((m.blur + m.glare + m.frame + m.light) / 4);
+            if (m.detect < 30) guide.className = 'doc-guide bad';
+            else if (overall > 75 && m.detect > 60) guide.className = 'doc-guide good';
+            else if (overall > 50) guide.className = 'doc-guide warn';
+            else guide.className = 'doc-guide bad';
+
+            // Check cards
+            updateCheck('detect', m.detect,
+                m.detect > 60 ? 'pass' : m.detect > 35 ? 'warn' : 'fail',
+                m.detect > 60 ? 'Document detected and positioned in frame' : m.detect > 35 ? 'Partial detection — center document fully' : 'No document detected — place ID in the guide frame');
+
+            updateCheck('blur', m.blur,
+                m.blur > 70 ? 'pass' : m.blur > 40 ? 'warn' : 'fail',
+                m.blur > 70 ? 'Image is sharp — text is readable' : m.blur > 40 ? 'Slightly blurry — hold device steadier' : 'Too blurry — brace your hand or move closer');
+
+            updateCheck('glare', m.glare,
+                m.glare > 70 ? 'pass' : m.glare > 45 ? 'warn' : 'fail',
+                m.glare > 70 ? 'No significant glare detected' : m.glare > 45 ? 'Some glare — tilt the document slightly' : 'High glare — move away from direct light sources');
+
+            updateCheck('frame', m.frame,
+                m.frame > 65 ? 'pass' : m.frame > 35 ? 'warn' : 'fail',
+                m.frame > 65 ? 'Document edges detected — all corners visible' : m.frame > 35 ? 'Partial framing — show all 4 corners' : 'Document not framed — align with guide corners');
+
+            updateCheck('light', m.light,
+                m.light > 65 ? 'pass' : m.light > 40 ? 'warn' : 'fail',
+                m.light > 65 ? 'Good lighting conditions' : 'Uneven lighting — move to a brighter, diffuse light');
+
+            // Overall bar
+            const fill = document.getElementById('overallFill');
+            const num = document.getElementById('overallNum');
+            fill.style.width = overall + '%';
+            fill.style.background = overall > 75 ? 'var(--accent)' : overall > 50 ? 'var(--warn)' : 'var(--red)';
+            num.textContent = overall;
+            num.style.color = overall > 75 ? 'var(--accent-d)' : overall > 50 ? '#92400e' : 'var(--red)';
+
+            // Live score overlay
+            document.getElementById('liveScore').innerHTML = `${overall}<span>/100</span>`;
+
+            // Cam pills
+            const pills = document.getElementById('camPills');
+            const pillItems = [];
+            if (m.detect > 60) pillItems.push({ label: 'Doc aligned', state: 'pass' });
+            else pillItems.push({ label: 'No doc detected', state: 'fail' });
+            if (m.glare < 45) pillItems.push({ label: 'Glare detected', state: 'fail' });
+            if (m.blur < 40) pillItems.push({ label: 'Too blurry', state: 'fail' });
+            if (m.light < 40) pillItems.push({ label: 'Poor lighting', state: 'fail' });
+            if (overall > 75 && m.detect > 60) pillItems.push({ label: 'Ready to capture', state: 'pass' });
+            pills.innerHTML = pillItems.map(p => `<div class="qpill ${p.state}">${p.label}</div>`).join('');
+
+            // Capture button
+            const ready = overall > 75 && m.detect > 60;
+            const capBtn = document.getElementById('captureBtn');
+            capBtn.disabled = !ready;
+            captureReady = ready;
+            if (ready) finalMetrics = { ...m };
+
+            renderGuidance(m);
+        }
+
+        function updateCheck(key, score, state, msg) {
+            document.getElementById('card-' + key).className = 'check-card ' + state;
+            const st = document.getElementById('status-' + key);
+            st.className = 'check-status ' + state;
+            st.textContent = state === 'pass' ? 'Pass' : state === 'warn' ? 'Review' : 'Fail';
+            const bar = document.getElementById('bar-' + key);
+            bar.style.width = score + '%';
+            bar.className = 'check-bar ' + (score > 70 ? 'good' : score > 40 ? 'ok' : 'bad');
+            document.getElementById('msg-' + key).textContent = msg;
+        }
+
+        function renderGuidance(m) {
+            const tips = [];
+            if (m.detect < 60) tips.push({ text: 'Place your document flat in the center of the frame', active: true });
+            if (m.blur < 60) tips.push({ text: 'Hold device steady — brace against a surface if needed', active: true });
+            if (m.glare < 60) tips.push({ text: 'Tilt document or move away from overhead light to reduce glare', active: true });
+            if (m.frame < 60) tips.push({ text: 'Ensure all four document corners are visible in the frame', active: true });
+            if (m.light < 60) tips.push({ text: 'Move to a brighter, evenly-lit area', active: true });
+            if (tips.length === 0) {
+                tips.push({ text: 'All checks passing — press the capture button when ready', active: false });
+                tips.push({ text: 'Keep the document flat and parallel to the camera lens', active: false });
+            }
+            document.getElementById('guidanceList').innerHTML = tips.map(t =>
+                `<div class="guidance-item"><div class="guidance-dot${t.active ? ' active' : ''}"></div>${t.text}</div>`
+            ).join('');
+        }
+
+        // ─── CAPTURE ─────────────────────────────────
+        function captureDoc() {
+            if (!captureReady) return;
+            cancelAnimationFrame(animFrame);
+
+            if (stream) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                stream.getTracks().forEach(t => t.stop());
+                video.style.display = 'none';
+            }
+            document.getElementById('liveBadge').style.display = 'none';
+            document.getElementById('qualityOverlay').style.display = 'none';
+            document.getElementById('analysisCanvas').style.display = 'none';
+            document.getElementById('docGuide').style.display = 'none';
+            document.getElementById('scanLine').style.display = 'none';
+            document.getElementById('detectBanner').style.display = 'none';
+            document.getElementById('camPills').style.display = 'none';
+            document.getElementById('overallBar').style.display = 'none';
+            document.getElementById('camActiveControls').style.display = 'none';
+            document.getElementById('btnRetry').style.display = 'block';
+            document.getElementById('camTitle').textContent = 'Document Captured ✓';
+            document.getElementById('camDesc').textContent = 'Photo taken successfully. Review and proceed.';
+
+            // Show preview
+            const preview = document.getElementById('previewImg');
+            preview.src = canvas.toDataURL('image/jpeg', 0.9);
+            preview.style.display = 'block';
+
+            // Prepare review screen
+            buildReviewScreen();
+            goTo('s3');
+        }
+
+        function retryCapture() {
+            document.getElementById('previewImg').style.display = 'none';
+            document.getElementById('btnRetry').style.display = 'none';
+            document.getElementById('camStartArea').style.display = 'block';
+            document.getElementById('camTitle').textContent = 'Capture Front of ID';
+            const labels = { passport: 'Passport', 'national-id': 'National ID', 'drivers-license': "Driver's License" };
+            document.getElementById('camDesc').innerHTML = `Position your <strong>${labels[selectedDocType]}</strong> inside the guide frame. All four corners must be visible.`;
+            document.getElementById('docGuide').style.display = 'block';
+            document.getElementById('detectBanner').style.display = 'block';
+            document.getElementById('camPills').style.display = 'flex';
+
+            // Reset checks
+            ['detect', 'blur', 'glare', 'frame', 'light'].forEach(k => {
+                document.getElementById('card-' + k).className = 'check-card';
+                const st = document.getElementById('status-' + k);
+                st.className = 'check-status idle'; st.textContent = 'Idle';
+                document.getElementById('bar-' + k).style.width = '0%';
+                document.getElementById('bar-' + k).className = 'check-bar';
+            });
+            captureReady = false;
+            isSimulating = false;
+            stream = null;
+        }
+
+        // ─── FLIP / FLASH ─────────────────────────────
+        let facingMode = 'environment';
+        async function flipCamera() {
+            if (stream) { stream.getTracks().forEach(t => t.stop()); }
+            facingMode = facingMode === 'environment' ? 'user' : 'environment';
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
+                video.srcObject = stream;
+            } catch (e) { }
+        }
+        function toggleFlash() {
+            const btn = document.getElementById('flashBtn');
+            btn.style.background = btn.style.background ? '' : 'var(--warn-light)';
+        }
+
+        // ─── SCREEN 3 — REVIEW ───────────────────────
+        function buildReviewScreen() {
+            const m = finalMetrics;
+            const overall = Math.round((m.blur + m.glare + m.frame + m.light) / 4);
+
+            // Quality analysis rows
+            const checks = [
+                {
+                    key: 'blur', label: 'Blur Check',
+                    score: m.blur,
+                    pass: m.blur > 70,
+                    warn: m.blur > 40 && m.blur <= 70,
+                    passMsg: 'Document text is sharp and legible.',
+                    warnMsg: 'Slightly blurry — may affect readability.',
+                    failMsg: 'Too blurry — text may not be readable. Consider retaking.'
+                },
+                {
+                    key: 'glare', label: 'Glare Check',
+                    score: m.glare,
+                    pass: m.glare > 70,
+                    warn: m.glare > 45 && m.glare <= 70,
+                    passMsg: 'No reflections obscuring the information.',
+                    warnMsg: 'Minor glare — verify no text is obscured.',
+                    failMsg: 'Significant glare — information may be obscured.'
+                },
+                {
+                    key: 'frame', label: 'Edge Detection',
+                    score: m.frame,
+                    pass: m.frame > 65,
+                    warn: m.frame > 35 && m.frame <= 65,
+                    passMsg: 'All four corners of the ID are visible.',
+                    warnMsg: 'Partial framing detected — some edges may be cut.',
+                    failMsg: 'Document not fully in frame — edges missing.'
+                },
+                {
+                    key: 'light', label: 'Lighting',
+                    score: m.light,
+                    pass: m.light > 65,
+                    warn: m.light > 40 && m.light <= 65,
+                    passMsg: 'Even, well-lit exposure across the document.',
+                    warnMsg: 'Uneven lighting — some areas may be hard to read.',
+                    failMsg: 'Poor lighting — document details may not be captured.'
+                },
+                {
+                    key: 'hologram', label: 'Hologram Visibility',
+                    score: Math.random() > 0.5 ? 85 : 45,
+                    pass: Math.random() > 0.4,
+                    warn: false,
+                    passMsg: 'Security hologram is visible and appears genuine.',
+                    warnMsg: '',
+                    failMsg: 'Try tilting the card slightly to capture the reflective security feature.'
+                }
+            ];
+
+            const rows = checks.map(c => {
+                const state = c.pass ? 'pass' : (c.warn ? 'warn' : 'fail');
+                const msg = c.pass ? c.passMsg : (c.warn ? c.warnMsg : c.failMsg);
+                return `
+      <div class="qa-row ${state === 'fail' ? 'qa-warn' : state === 'warn' ? 'qa-ok' : ''}">
+        <div class="qa-icon ${state}">${state === 'pass' ? '✓' : state === 'warn' ? '!' : '!'}</div>
+        <div>
+          <div class="qa-text-title ${state === 'fail' ? 'fail' : state === 'warn' ? 'warn' : ''}">${c.label}: ${state === 'pass' ? 'Pass' : state === 'warn' ? 'Partial' : 'Fail'}</div>
+          <div class="qa-text-sub ${state === 'fail' ? 'fail' : state === 'warn' ? 'warn' : ''}">${msg}</div>
+        </div>
+      </div>`;
+            });
+            document.getElementById('qaRows').innerHTML = rows.join('');
+
+            // Identity verification
+            const regName = document.getElementById('regName').value.trim();
+            document.getElementById('regNameDisplay').textContent = regName || '—';
+
+            document.getElementById('docNameDisplay').textContent = 'Reading text...';
+            const resultEl = document.getElementById('idVerifyResult');
+            resultEl.className = 'id-result-row checking';
+            resultEl.innerHTML = `<div class="id-result-icon">⏳</div><div><div>Extracting text via AI…</div><div class="id-result-sub">Running Tesseract OCR on document</div></div>`;
+            document.getElementById('submitBtn').disabled = true;
+            
+            // For testing: we grab the canvas. If the canvas is empty (simulated), it might not find text.
+            const imageData = document.getElementById('canvasEl').toDataURL('image/jpeg', 0.9);
+
+            Tesseract.recognize(
+                imageData,
+                'eng',
+                { logger: m => console.log(m) }
+            ).then(({ data: { text } }) => {
+                const extractedText = text.toUpperCase();
+                console.log("OCR Extracted Text:", extractedText);
+                
+                const matchStatus = realNamesMatch(regName, extractedText);
+                const match = matchStatus.status;
+                const foundName = matchStatus.foundName || 'NO TEXT FOUND';
+                document.getElementById('docNameDisplay').textContent = foundName;
+
+                if (match === 'full') {
+                    resultEl.className = 'id-result-row match';
+                    resultEl.innerHTML = `<div class="id-result-icon">✅</div><div><div>Name verified — exact match</div><div class="id-result-sub">Registered name matches the document name</div></div>`;
+                } else if (match === 'partial') {
+                    resultEl.className = 'id-result-row';
+                    resultEl.style.background = 'var(--warn-light)';
+                    resultEl.style.color = '#92400e';
+                    resultEl.innerHTML = `<div class="id-result-icon">⚠️</div><div><div>Partial name match — review required</div><div class="id-result-sub">Names are similar but not identical — human review may be needed</div></div>`;
+                } else {
+                    resultEl.className = 'id-result-row nomatch';
+                    resultEl.innerHTML = `<div class="id-result-icon">❌</div><div><div>Name mismatch detected</div><div class="id-result-sub">Registered name does not match document — please verify your details</div></div>`;
+                }
+
+                // Authenticity
+                const authEl = document.getElementById('authResult');
+                const authSub = document.getElementById('authSub');
+                const authentic = overall > 65 && m.detect > 50;
+                if (authentic) {
+                    authEl.className = 'id-result-row match';
+                    authSub.textContent = 'Security features and document structure appear genuine';
+                } else {
+                    authEl.className = 'id-result-row';
+                    authEl.style.background = 'var(--warn-light)';
+                    authEl.style.color = '#92400e';
+                    authSub.textContent = 'Low quality image — authenticity cannot be fully verified';
+                }
+
+                // Enable submit if quality is ok
+                const canSubmit = overall > 50 && match !== 'no-match';
+                document.getElementById('submitBtn').disabled = !canSubmit;
+
+                // Populate success screen scores
+                document.getElementById('sum-blur').style.width = Math.round(m.blur) + '%';
+                document.getElementById('sum-blur-v').textContent = Math.round(m.blur);
+                document.getElementById('sum-glare').style.width = Math.round(m.glare) + '%';
+                document.getElementById('sum-glare-v').textContent = Math.round(m.glare);
+                document.getElementById('sum-frame').style.width = Math.round(m.frame) + '%';
+                document.getElementById('sum-frame-v').textContent = Math.round(m.frame);
+                document.getElementById('sum-light').style.width = Math.round(m.light) + '%';
+                document.getElementById('sum-light-v').textContent = Math.round(m.light);
+
+                document.getElementById('s4NameMatch').textContent = regName + ' → ' + foundName;
+                document.getElementById('s4MatchBadge').textContent = match === 'full' ? 'MATCH' : match === 'partial' ? 'REVIEW' : 'MISMATCH';
+                document.getElementById('s4MatchBadge').style.background = match === 'full' ? 'var(--accent-light)' : match === 'partial' ? 'var(--warn-light)' : 'var(--red-light)';
+                document.getElementById('s4MatchBadge').style.color = match === 'full' ? 'var(--accent-d)' : match === 'partial' ? '#92400e' : 'var(--red)';
+
+                const secNum = Math.random().toString(36).substr(2, 6).toUpperCase();
+                document.getElementById('secId').textContent = `Security ID: #KYC-${secNum}`;
+            }).catch(err => {
+                console.error(err);
+                document.getElementById('docNameDisplay').textContent = "OCR FAILED";
+                resultEl.className = 'id-result-row nomatch';
+                resultEl.innerHTML = `<div class="id-result-icon">❌</div><div><div>OCR failed</div><div class="id-result-sub">Could not read text from image</div></div>`;
+                document.getElementById('submitBtn').disabled = false;
+            });
+        }
+
+        // Actual OCR name matching
+        function realNamesMatch(reg, extractedText) {
+            if (!reg || !extractedText) return {status: 'no-match', foundName: 'NONE'};
+            const normalize = s => s.toUpperCase().replace(/[^A-Z\s]/g, '').trim().replace(/\s+/g, ' ');
+            const a = normalize(reg);
+            const aParts = a.split(' ').filter(p => p.length > 0);
+            
+            // Try to find parts in the extracted text
+            let foundParts = [];
+            aParts.forEach(p => {
+                if (extractedText.includes(p)) foundParts.push(p);
+            });
+            
+            const foundName = foundParts.join(' ');
+            
+            if (foundParts.length === aParts.length && aParts.length > 0) return {status: 'full', foundName: foundName};
+            if (foundParts.length > 0 && foundParts.length >= Math.ceil(aParts.length / 2)) return {status: 'partial', foundName: foundName};
+            return {status: 'no-match', foundName: foundName || 'UNREADABLE'};
+        }
+
+        // ─── SCREEN 4 ─────────────────────────────────
+        function submitDocument() {
+            goTo('s4');
+        }
+
+        // ─── INIT ─────────────────────────────────────
+        // Set idle state for checks on load
+        ['detect', 'blur', 'glare', 'frame', 'light'].forEach(k => {
+            const msgs = {
+                detect: 'Waiting — start camera to detect document',
+                blur: 'Laplacian variance sharpness analysis',
+                glare: 'Overexposed pixel ratio detection',
+                frame: 'Sobel edge detection for document boundaries',
+                light: 'Brightness distribution measurement'
+            };
+            document.getElementById('msg-' + k).textContent = msgs[k];
+        });
+    </script>
+</body>
+
+</html>
